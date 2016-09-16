@@ -1,0 +1,68 @@
+# -*- Makefile -*-
+#
+# This is a make+ file. Make+ is a set of scripts which enhance GNU
+# make and let you build RPMs, and other package types with just one
+# control file.  To build this package you will need to download make+
+# from this site: http://www.annexia.org/freeware/makeplus/
+
+PACKAGE		:= cdoc
+VERSION_MAJOR	:= 0
+VERSION_MINOR 	:= 9.7
+VERSION		:= $(VERSION_MAJOR).$(VERSION_MINOR)
+
+SUMMARY		:= Simple documentation tool for C programs and libraries.
+COPYRIGHT	:= GNU GPL
+AUTHOR		:= Richard W.M. Jones <rich@annexia.org>
+
+define DESCRIPTION
+cdoc is a simple documentation tool for C programs and libraries. It
+takes inline embedded comments and turns them into manual pages. It
+needs Perl to run.
+endef
+
+RPM_REQUIRES	:= perl
+RPM_GROUP	:= Development/Building
+
+all:	build
+
+configure:
+	$(MP_CONFIGURE_START)
+	$(MP_CONFIGURE_END)
+
+build:
+
+test:
+
+install:
+	install -d $(DESTDIR)$(bindir)
+	install -m 0755 $(srcdir)/cdoc $(DESTDIR)$(bindir)
+
+define WEBSITE
+<% include page_header.msp %>
+
+<h1>cdoc - $(SUMMARY)</h1>
+
+<p>
+$(DESCRIPTION)
+</p>
+
+<h1>Download</h1>
+
+<ul>
+<li> <a href="$(PACKAGE)-$(VERSION).tar.gz">$(PACKAGE)-$(VERSION).tar.gz</a>
+<li> <a href="$(PACKAGE)-$(VERSION)-1.i386.rpm">$(PACKAGE)-$(VERSION)-1.i386.rpm</a>
+<li> <a href="$(PACKAGE)-$(VERSION)-1.src.rpm">$(PACKAGE)-$(VERSION)-1.src.rpm</a>
+<li> <a href="$(PACKAGE)-$(VERSION).bin.tar.gz">$(PACKAGE)-$(VERSION).bin.tar.gz</a>
+</ul>
+
+<% include page_footer.msp %>
+endef
+
+upload_website:
+	scp $(PACKAGE)-$(VERSION).tar.gz $(PACKAGE)-$(VERSION)-1.*.rpm \
+	$(PACKAGE)-$(VERSION).bin.tar.gz \
+	10.0.0.248:annexia.org/freeware/$(PACKAGE)/
+	scp index.html \
+	10.0.0.248:annexia.org/freeware/$(PACKAGE)/index.msp
+
+.PHONY:	build configure test upload_website

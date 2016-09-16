@@ -1,0 +1,235 @@
+#!/usr/bin/perl -w
+# -*- cperl -*-
+
+# cdoc - generate man pages for C code
+# Copyright (C) 2000 Bibliotech Ltd., Unit 2-3, 50 Carnwath Road,
+# London, SW6 3EG, United Kingdom.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+# $Id: cdoc,v 1.4 2001/02/16 17:02:15 rich Exp $
+
+use strict;
+
+my $arg;
+
+my $date = `date +'%B %d, %Y'`;
+$date =~ s/[\r\n]+$//;
+
+my $author;
+my $version;
+my $license;
+
+while ($arg = shift @ARGV)
+  {
+    my ($type, $header_file);
+
+    if ($arg eq "--help" || $arg eq "-?" || $arg eq "-h")
+      {
+	print STDERR
+	  "cdoc [--options ...] files ...\n",
+	  "Options are:\n",
+	  "  --author \"Author name\"      Details for the AUTHOR section\n",
+	  "  --version package-version   Details for the VERSION section\n",
+	  "  --license \"License data\"    Details for the LICENSE section\n";
+	exit 1;
+      }
+    elsif ($arg eq "--author")
+      {
+	$author = shift @ARGV;
+	next;
+      }
+    elsif ($arg eq "--version")
+      {
+	$version = shift @ARGV;
+	next;
+      }
+    elsif ($arg eq "--license")
+      {
+	$license = shift @ARGV;
+	next;
+      }
+    elsif ($arg =~ /(.*)\.h$/)
+      {
+      header:
+	$type = "header file";
+	$header_file = $1;
+	open FILE, "<$arg"
+	  or die "$arg: cannot open file: $!";
+      }
+    else
+      {
+	print STDERR "$arg: unknown file type: assuming it's a header file";
+	goto header;
+      }
+
+    while (<FILE>)
+      {
+	s/[\n\r]+$//;
+
+	# Look for intro line.
+	if (m(^\s*/\*\s*(Function|Variable):\s*(.*?)\s+-\s+(.*))o)
+	  {
+	    my $manpage = $2;
+	    my $name_text = $3;
+
+	    my @functions = ();
+	    push @functions, { name => $manpage };
+
+	    my $description = "";
+	    my $bugs = "";
+	    my $history = "";
+	    my $see_also = "";
+	    my $returns = "";
+	    my $section = \$description;
+
+	    # Read the rest of the comment block.
+	    while (<FILE>)
+	      {
+		s/[\n\r]+$//;
+		s/^\s*\*\s*//;	# Remove leading " * ".
+
+		last if m(^/)o; # End of comment block?
+
+		if (m(^(Function|Variable):\s*(.*))o)
+		  {
+		    push @functions, { name => $2 };
+		  }
+		elsif (m(^Bugs:\s*(.*))o)
+		  {
+		    $section = \$bugs;
+		    $$section .= $1 . " ";
+		  }
+		elsif (m(^History:\s*(.*))o)
+		  {
+		    $section = \$history;
+		    $$section .= $1 . " ";
+		  }
+		elsif (m(^See also:\s*(.*))o)
+		  {
+		    $section = \$see_also;
+		    $$section .= $1 . " ";
+		  }
+		elsif (m(^Returns:\s*(.*))o)
+		  {
+		    $section = \$returns;
+		    $$section .= $1 . " ";
+		  }
+		elsif (m/^\s*$/)
+		  {
+		    $$section .= "\n";
+		  }
+		else
+		  {
+		    $$section .= $_;
+		    $$section .= " ";
+		  }
+	      }
+
+	    # Mark up the sections.
+	    $description = mark_up ($description);
+	    $bugs = mark_up ($bugs);
+	    $history = mark_up ($history);
+	    $see_also = mark_up ($see_also);
+	    $returns = mark_up ($returns);
+
+	    # Read the functions which should follow, one per line, in order.
+	    my $fn;
+	    foreach $fn (@functions)
+	      {
+		$_ = <FILE>;
+
+		if (!$_ || !m($fn->{name}))
+		  {
+		    print STDERR "$arg: could not find prototype of variable/function: $fn->{name}\n";
+		    exit 1;
+		  }
+
+		s/[\n\r]+$//;
+		s/^extern\s+//;
+		$fn->{prototype} = $_;
+	      }
+
+	    # Now we're in a situation to produce the manual page.
+	    print "cdoc: creating $manpage.3\n";
+
+	    open MANPAGE, ">$manpage.3"
+	      or die "$manpage.3: cannot open file: $!";
+
+	    my $names = join ", ", map { $_->{name} } @functions;
+
+	    print MANPAGE
+	      ".TH $manpage 3 \"$date\" \"GNU\" \"Programmer's Manual\"\n",
+	      ".SH NAME\n",
+	      "$names \\- $name_text\n",
+	      ".SH SYNOPSIS\n",
+	      ".nf\n",
+	      ".B #include <$header_file.h>\n",
+	      ".sp\n";
+
+	    foreach (@functions)
+	      {
+		print MANPAGE ".BI \"$_->{prototype}\"\n";
+	      }
+
+	    print MANPAGE
+	      ".fi\n",
+	      ".SH DESCRIPTION\n",
+	      "$description\n";
+
+	    print MANPAGE ".SH RETURNS\n$returns\n" if $returns;
+	    print MANPAGE ".SH BUGS\n$bugs\n" if $bugs;
+	    print MANPAGE ".SH AUTHOR\n$author\n" if $author;
+	    print MANPAGE ".SH LICENSE\n$license\n" if $license;
+	    print MANPAGE ".SH VERSION\n$version\n" if $version;
+	    print MANPAGE ".SH HISTORY\n$history\n" if $history;
+	    print MANPAGE ".SH SEE ALSO\n$see_also\n" if $see_also;
+
+	    close MANPAGE;
+
+	    # Links for other pages.
+	    my @other_pages = @functions;
+	    shift @other_pages;
+
+	    foreach $fn (@other_pages)
+	      {
+		print "cdoc: creating $fn->{name}.3\n";
+
+		open MANPAGE, ">$fn->{name}.3"
+		  or die "$fn->{name}.3: cannot open file: $!";
+
+		print MANPAGE
+		  ".so man3/$manpage.3\n";
+
+		close MANPAGE;
+	      }
+	  }
+      }
+
+    close FILE;
+  }
+
+exit;
+
+sub mark_up
+  {
+    local $_ = shift;
+
+    s/\n/\n.PP\n/ogs;
+    s/\@code{(.*?)}/\\fB$1\\fP/ogs;
+    s/\@ref{(.*?)}/\\fB$1\\fP/ogs; # Should be able to handle this better. XXX
+
+    return $_;
+  }

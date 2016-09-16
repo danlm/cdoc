@@ -1,0 +1,24 @@
+cdoc is a perldoc-like documentation tool for C.
+
+It is very simple to use. Basically you just need to add the following
+in front of your function prototypes in header files:
+
+/* Function: foo - foobar a baz
+ * Function: foo_p
+ *
+ * The @code{foo} function foobars a baz. It takes one parameter, the
+ * pointer to the @code{baz} structure.
+ *
+ * @code{foo_p} returns true if the parameter @code{baz} has been foobarred.
+ *
+ * See also: @ref{baz(3)}, @ref{frobnicate(3)}.
+ */
+extern void foo (baz *);
+extern int foo_p (baz *);
+
+More advanced examples of the syntax can be found in the c2lib, pthrlib
+and other packages at http://www.annexia.org/freeware/
+
+To turn your header files into manpages, type: cdoc *.h
+
+It was written by Richard W.M. Jones (rich@annexia.org).
